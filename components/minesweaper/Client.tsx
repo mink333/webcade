@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export default function Client() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D>(null);
   const fieldConfig = useRef({ col: 10, row: 10, mine: 10 });
+  const [fcState, setFcState] = useState({ col: 10, row: 10, mine: 10 });
   const fieldData = useRef<Uint8Array>(null);
   const fieldCount = useRef<Uint8Array>(null);
   const coord2Index = (col: number, row: number) =>
@@ -12,7 +14,7 @@ export default function Client() {
   const index2Col = (index: number) => index % fieldConfig.current.col;
   const index2Row = (index: number) =>
     Math.floor(index / fieldConfig.current.col);
-  const neighbor = [
+  const neighbor = useMemo(() => [
     [-1, -1],
     [0, -1],
     [1, -1],
@@ -21,13 +23,13 @@ export default function Client() {
     [-1, 1],
     [0, 1],
     [1, 1],
-  ];
+  ], []);
   const isMine = (n: number) => (n & 1) !== 0;
   const isFlagged = (n: number) => (n & 2) !== 0;
   const isRevealed = (n: number) => (n & 4) !== 0;
-  const toggleFlag = (fd: Uint8Array, col: number, row: number) => {
+  const toggleFlag = useCallback((fd: Uint8Array, col: number, row: number) => {
     fd[coord2Index(col, row)] ^= 2;
-  };
+  }, []);
   const reveal = (fd: Uint8Array, col: number, row: number) => {
     fd[coord2Index(col, row)] |= 4;
     if (!fieldCount.current || fieldCount.current[coord2Index(col, row)] !== 0)
@@ -61,7 +63,7 @@ export default function Client() {
   const MINE_SIZE = 50;
   const MINE_GAP = 10;
 
-  const drawViewer = (ctx: CanvasRenderingContext2D | null) => {
+  const drawViewer = useCallback((ctx: CanvasRenderingContext2D | null) => {
     console.log("drawing");
     const vc = viewerConfig.current;
     const fd = fieldData.current;
@@ -117,8 +119,8 @@ export default function Client() {
         );
       }
     });
-  };
-  const handleTileClick = (
+  }, []);
+  const handleTileClick = useCallback( (
     ctx: CanvasRenderingContext2D | null,
     x: number,
     y: number,
@@ -150,9 +152,9 @@ export default function Client() {
       }
     }
     drawViewer(ctx);
-  };
+  }, [drawViewer, toggleFlag, reveal]);
 
-  const makeNewGame = (col: number, row: number, mine: number) => {
+  const makeNewGame = useCallback((col: number, row: number, mine: number) => {
     const fieldData = new Uint8Array(col * row);
     const fieldCount = new Uint8Array(col * row);
     let count = 0;
@@ -177,7 +179,7 @@ export default function Client() {
       count = 0;
     });
     return { fieldData, fieldCount };
-  };
+  }, [neighbor]);
 
   useEffect(() => {
     console.log("initializing...");
@@ -191,7 +193,8 @@ export default function Client() {
     console.log(fieldData.current);
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    ctxRef.current = canvas.getContext("2d");
+    const ctx = ctxRef.current;
     const resize = () => {
       canvas.width = canvas.clientWidth * viewerConfig.current.upscale;
       canvas.height = canvas.clientHeight * viewerConfig.current.upscale;
@@ -334,7 +337,10 @@ export default function Client() {
       canvas.removeEventListener("pointerup", handlePointerUp);
       canvas.removeEventListener("wheel", handleWheel);
     };
-  }, []);
+  }, [drawViewer, handleTileClick, makeNewGame]);
+  const applySetting = () => {
+    const { col, row, mine } = fcState;
+  };
   return (
     <div className="bg-blue-100 w-full flex-1 flex flex-col">
       <canvas
@@ -349,20 +355,42 @@ export default function Client() {
         <div className="absolute top-1/2 left-1/2 -translate-1/2 bg-white p-4 rounded-lg shadow-2xl space-y-4">
           <h2 className="text-xl font-semibold">설정</h2>
           <div className="flex flex-col gap-2">
-            <label>가로</label>
-            <input type="number" className="bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md"/>
+            <label htmlFor="col">가로</label>
+            <input
+              id="col"
+              type="number"
+              value={fcState.col}
+              onChange={(e) => setFcState((prev) => ({...prev, col: parseInt(e.target.value)}))}
+              className="px-2 py-1.5 bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md"
+            />
           </div>
           <div className="flex flex-col gap-2">
-            <label>세로</label>
-            <input type="number" className="bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md" />
+            <label htmlFor="row">세로</label>
+            <input
+              id="row"
+              type="number"
+              value={fcState.row}
+              onChange={(e) => setFcState((prev) => ({...prev, row: parseInt(e.target.value)}))}
+              className="px-2 py-1.5 bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md"
+            />
           </div>
           <div className="flex flex-col gap-2">
-            <label>지뢰 개수</label>
-            <input type="number" className="bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md" />
+            <label htmlFor="mine">지뢰 개수</label>
+            <input
+              id="mine"
+              type="number"
+              value={fcState.mine}
+              onChange={(e) => setFcState((prev) => ({...prev, mine: parseInt(e.target.value)}))}
+              className="px-2 py-1.5 bg-gray-200 border-2 border-gray-300 focus:border-blue-400 rounded-md focus:rounded-md"
+            />
           </div>
           <div className="flex gap-2">
-            <button className="flex-1 h-12 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-md">취소</button>
-            <button className="flex-1 h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-md text-white">저장</button>
+            <button className="flex-1 h-12 bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-md">
+              취소
+            </button>
+            <button className="flex-1 h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-md text-white">
+              저장
+            </button>
           </div>
         </div>
       </div>
