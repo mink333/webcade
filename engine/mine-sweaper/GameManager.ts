@@ -16,7 +16,7 @@ export class GameManager {
   private lastCenterPoint: { x: number; y: number } | null = null;
   private lastPinchDistance = 0;
   private dragDistance = 0;
-  constructor(canvas: HTMLCanvasElement, width: number, height: number, mines: number) {
+  constructor(canvas: HTMLCanvasElement, width: number, height: number, mines: number, setGamePhase: (phase: typeof this.gameState)=>void) {
     this.canvas = canvas;
     this.width = width;
     this.height = height;
@@ -24,10 +24,16 @@ export class GameManager {
     this.field = new Field(width, height, mines);
     this.renderer = new Renderer(canvas.getContext("2d"));
     this.resize();
+    this.BindHandler();
     this.gameState = "ready";
+    setGamePhase(this.gameState);
+    console.log("new Game");
   }
   public resize() {
     this.renderer.resize(this.canvas.clientWidth, this.canvas.clientHeight);
+  }
+  private draw() {
+    this.renderer.draw(this.field.getData(), this.width, this.height);
   }
   private handlePointerDown = (e: PointerEvent) => {
     e.preventDefault();
@@ -58,7 +64,7 @@ export class GameManager {
       this.dragDistance += Math.hypot(dx, dy);
 
       this.lastPanPoint = { x: e.offsetX, y: e.offsetY };
-      drawViewer(ctx);
+      this.draw();
     }
 
     if (this.activePointers.size === 2) {
@@ -78,7 +84,7 @@ export class GameManager {
 
       if (this.lastPinchDistance > 0) {
         const zoomFactor = currentDist / this.lastPinchDistance;
-        applyZoomAtPoint(centerX, centerY, zoomFactor);
+        this.applyZoomAtPoint(centerX, centerY, zoomFactor);
       }
       this.lastPinchDistance = currentDist;
       this.lastCenterPoint = { x: centerX, y: centerY };
@@ -102,6 +108,12 @@ export class GameManager {
       this.lastCenterPoint = null;
     }
   };
+  private handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    this.draw();
+    this.applyZoomAtPoint(e.offsetX, e.offsetY, zoomFactor);
+  };
   private applyZoomAtPoint = (
     targetX: number,
     targetY: number,
@@ -115,6 +127,19 @@ export class GameManager {
     this.renderer.pos.x += (localX - prevLocalX) * (this.renderer.ratio / 100);
     this.renderer.pos.y += (localY - prevLocalY) * (this.renderer.ratio / 100);
     console.log("local: ", localX, localY);
-    drawViewer(ctx);
+    this.draw();
   };
+  private BindHandler = () => {
+    this.canvas.addEventListener("pointerup", this.handlePointerUp);
+    this.canvas.addEventListener("pointermove", this.handlePointerMove);
+    this.canvas.addEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.addEventListener("wheel", this.handleWheel);
+  }
+
+  public dismiss() {
+    this.canvas.removeEventListener("pointerup", this.handlePointerUp);
+    this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+    this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+    this.canvas.removeEventListener("wheel", this.handleWheel);
+  }
 }
